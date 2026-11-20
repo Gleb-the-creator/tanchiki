@@ -1,0 +1,1703 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Танчики</title>
+  <script src="vendor/three.min.js"></script>
+  <script src="vendor/OrbitControls.js"></script>
+  <script src="vendor/GLTFLoader.js"></script>
+  <script src="vendor/gsap.min.js"></script>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0f0c; user-select: none; -webkit-user-select: none; }
+    #webgl-container { position: fixed; inset: 0; }
+    #webgl-container canvas { display: block; }
+  </style>
+</head>
+<body>
+  <div id="ld" style="position:fixed;inset:0;z-index:99;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#0b0f0c;color:#d6e4d0;font:600 18px/1.4 system-ui,sans-serif;letter-spacing:.06em">
+    <div style="font-size:34px;margin-bottom:18px">ТАНЧИКИ</div>
+    <div style="width:280px;height:8px;background:#1f2a22;border-radius:4px;overflow:hidden"><div id="ldb" style="height:100%;width:0;background:#4ade80;transition:width .2s"></div></div>
+    <div id="ldt" style="margin-top:10px;font-size:14px;opacity:.75">Загрузка… 0%</div>
+  </div>
+  <script>
+    function __ld(p) { document.getElementById('ldb').style.width = p + '%'; document.getElementById('ldt').textContent = p < 100 ? 'Загрузка… ' + p + '%' : 'Запуск…'; }
+    window.addEventListener('load', () => setTimeout(() => { const e = document.getElementById('ld'); e.style.transition = 'opacity .4s'; e.style.opacity = 0; setTimeout(() => e.remove(), 450); }, 150));
+  </script>
+  <div id="webgl-container"></div>
+  <script>
+    // =========================================================================
+    // 1. SCENE, CAMERA, RENDERER & WET PARADE ASPHALT ENVIRONMENT
+    // =========================================================================
+    const container = document.getElementById('webgl-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x161c1a);
+    scene.fog = new THREE.FogExp2(0x161c1a, 0.0014);
+
+    function getViewportSize() {
+      const w = container.clientWidth || window.innerWidth || 1280;
+      const h = container.clientHeight || window.innerHeight || 700;
+      return { w, h };
+    }
+    const initSize = getViewportSize();
+    const camera = new THREE.PerspectiveCamera(38, initSize.w / initSize.h, 0.1, 1600);
+    camera.position.set(8.6, 3.6, 9.2);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setSize(initSize.w, initSize.h);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.18;
+    container.appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.target.set(0, 1.25, 0.2);
+    controls.maxPolarAngle = Math.PI * 0.492;
+    controls.minDistance = 2.8;
+    controls.maxDistance = 26;
+
+    // Overcast Wet Parade Lighting (Deep Low-Glare Tactical Atmosphere)
+    const hemiLight = new THREE.HemisphereLight(0xcbd5e1, 0x111612, 0.72);
+    hemiLight.position.set(0, 25, 0);
+    scene.add(hemiLight);
+
+    const dirLight = new THREE.DirectionalLight(0xfef3c7, 1.15);
+    dirLight.position.set(12, 18, 14);
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.width = 2048;
+    dirLight.shadow.mapSize.height = 2048;
+    dirLight.shadow.camera.near = 2;
+    dirLight.shadow.camera.far = 45;
+    const d = 8.5;
+    dirLight.shadow.camera.left = -d;
+    dirLight.shadow.camera.right = d;
+    dirLight.shadow.camera.top = d;
+    dirLight.shadow.camera.bottom = -d;
+    dirLight.shadow.bias = -0.0005;
+    scene.add(dirLight);
+
+    const rimLight = new THREE.DirectionalLight(0x64748b, 0.42);
+    rimLight.position.set(-14, 8, -12);
+    scene.add(rimLight);
+
+    // =========================================================================
+    // 2. HIGH-REALISM PROCEDURAL PBR CANVAS TEXTURES (MATTE CAST ARMOR & RUBBER)
+    // =========================================================================
+    function createOliveArmorTexture() {
+      const c = document.createElement('canvas');
+      c.width = 512; c.height = 512;
+      const ctx = c.getContext('2d');
+      // Rich Russian military dark olive drab (ХС-5146 / 4БО deep matte green)
+      ctx.fillStyle = 'rgb(44, 58, 40)';
+      ctx.fillRect(0, 0, 512, 512);
+
+      // Organic blotchy weathering & damp rain-streak modulation
+      for (let p = 0; p < 220; p++) {
+        const px = Math.random() * 512;
+        const py = Math.random() * 512;
+        const rad = 18 + Math.random() * 55;
+        const g = ctx.createRadialGradient(px, py, 2, px, py, rad);
+        const dark = Math.random() > 0.45;
+        g.addColorStop(0, dark ? 'rgba(26, 35, 24, 0.22)' : 'rgba(58, 74, 52, 0.18)');
+        g.addColorStop(1, 'rgba(44, 58, 40, 0)');
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(px, py, rad, 0, Math.PI * 2); ctx.fill();
+      }
+
+      // Fine rolled/cast steel surface micro-pitting (24,000 micro-pores)
+      for (let i = 0; i < 24000; i++) {
+        const v = (Math.random() - 0.5) * 16;
+        ctx.fillStyle = `rgb(${Math.max(22, 44 + v)}, ${Math.max(30, 58 + v)}, ${Math.max(20, 40 + v)})`;
+        ctx.fillRect(Math.random() * 512, Math.random() * 512, 1.5, 1.5);
+      }
+
+      // Subtle vertical rain/damp streaks
+      for (let s = 0; s < 90; s++) {
+        ctx.fillStyle = 'rgba(24, 32, 22, 0.14)';
+        ctx.fillRect(Math.random() * 512, Math.random() * 512, 1.5, 25 + Math.random() * 70);
+      }
+
+      // Recessed weld & armor plate seam + hex bolt heads
+      ctx.strokeStyle = 'rgba(20, 28, 18, 0.55)';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(3, 3, 506, 506);
+      ctx.strokeStyle = 'rgba(68, 86, 62, 0.25)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(6, 6, 500, 500);
+
+      [[16,16],[496,16],[16,496],[496,496],[256,16],[256,496]].forEach(([x,y]) => {
+        ctx.fillStyle = 'rgb(26, 35, 24)';
+        ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = 'rgb(54, 70, 49)';
+        ctx.beginPath(); ctx.arc(x - 1, y - 1, 4.2, 0, Math.PI * 2); ctx.fill();
+      });
+
+      const tex = new THREE.CanvasTexture(c);
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      tex.anisotropy = 4;
+      return tex;
+    }
+
+    function createArmorBumpTexture() {
+      const c = document.createElement('canvas');
+      c.width = 512; c.height = 512;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = 'rgb(128, 128, 128)';
+      ctx.fillRect(0, 0, 512, 512);
+      // High-frequency cast steel & anti-radiation coating micro-roughness
+      for (let i = 0; i < 32000; i++) {
+        const b = 90 + Math.floor(Math.random() * 76);
+        ctx.fillStyle = `rgb(${b},${b},${b})`;
+        ctx.fillRect(Math.random() * 512, Math.random() * 512, 2, 2);
+      }
+      // Deep panel groove & raised weld bead
+      ctx.strokeStyle = 'rgb(35, 35, 35)';
+      ctx.lineWidth = 4;
+      ctx.strokeRect(3, 3, 506, 506);
+      [[16,16],[496,16],[16,496],[496,496],[256,16],[256,496]].forEach(([x,y]) => {
+        ctx.fillStyle = 'rgb(225, 225, 225)';
+        ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
+      });
+      const tex = new THREE.CanvasTexture(c);
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      return tex;
+    }
+
+    function createRubberTexture() {
+      const c = document.createElement('canvas');
+      c.width = 256; c.height = 256;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = 'rgb(20, 22, 21)';
+      ctx.fillRect(0, 0, 256, 256);
+      // Heavy vulcanized rubber fabric weave & road dust near bottom
+      for (let i = 0; i < 9000; i++) {
+        const v = 15 + Math.floor(Math.random() * 14);
+        ctx.fillStyle = `rgb(${v}, ${v + 1}, ${v})`;
+        ctx.fillRect(Math.random() * 256, Math.random() * 256, 2, 1.5);
+      }
+      const tex = new THREE.CanvasTexture(c);
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      return tex;
+    }
+
+    function createParadeNumberTexture() {
+      const c = document.createElement('canvas');
+      c.width = 256; c.height = 256;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = 'rgb(28, 36, 27)';
+      ctx.fillRect(0, 0, 256, 256);
+      for (let i = 0; i < 3000; i++) {
+        const v = (Math.random() - 0.5) * 10;
+        ctx.fillStyle = `rgb(${28 + v}, ${36 + v}, ${27 + v})`;
+        ctx.fillRect(Math.random() * 256, Math.random() * 256, 2, 2);
+      }
+      // Authentic stenciled off-white tactical box & number "1"
+      ctx.fillStyle = '#d8dee3';
+      ctx.fillRect(28, 28, 200, 200);
+      ctx.fillStyle = 'rgb(26, 34, 25)';
+      ctx.fillRect(42, 42, 172, 172);
+      ctx.fillStyle = '#d8dee3';
+      ctx.font = 'bold 138px "Rajdhani", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('1', 128, 134);
+      return new THREE.CanvasTexture(c);
+    }
+
+    function createHeadlightLensTexture() {
+      const c = document.createElement('canvas');
+      c.width = 256; c.height = 256;
+      const ctx = c.getContext('2d');
+      const grad = ctx.createRadialGradient(128, 128, 8, 128, 128, 124);
+      grad.addColorStop(0, '#fffbeb');
+      grad.addColorStop(0.45, '#fde047');
+      grad.addColorStop(0.82, '#d97706');
+      grad.addColorStop(1, '#451a03');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 256, 256);
+      // Fresnel vertical fluted glass ribs (ФГ-127 tank headlamp lens)
+      ctx.strokeStyle = 'rgba(120, 53, 15, 0.38)';
+      ctx.lineWidth = 2;
+      for (let x = 16; x < 240; x += 10) {
+        ctx.beginPath(); ctx.moveTo(x, 12); ctx.lineTo(x, 244); ctx.stroke();
+      }
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(128, 128, 92, 0, Math.PI * 2); ctx.stroke();
+      return new THREE.CanvasTexture(c);
+    }
+
+    function createTrackPadTexture() {
+      const c = document.createElement('canvas');
+      c.width = 256; c.height = 256;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#141615';
+      ctx.fillRect(0, 0, 256, 256);
+      for (let y = 0; y < 256; y += 32) {
+        // Worn forged steel connector pin bar
+        ctx.fillStyle = '#252927';
+        ctx.fillRect(0, y, 256, 8);
+        // Matte black RMSh rubber asphalt pads
+        ctx.fillStyle = '#0d0f0e';
+        ctx.fillRect(18, y + 10, 96, 18);
+        ctx.fillRect(142, y + 10, 96, 18);
+        // Center guide tooth channel
+        ctx.fillStyle = '#313633';
+        ctx.fillRect(122, y + 8, 12, 22);
+      }
+      const tex = new THREE.CanvasTexture(c);
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(1, 14);
+      return tex;
+    }
+
+    function createWetAsphaltTexture() {
+      const c = document.createElement('canvas');
+      c.width = 512; c.height = 512;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#242b28';
+      ctx.fillRect(0, 0, 512, 512);
+      // Visible proving ground dirt/asphalt tracks, grid seams & gravel contrast
+      for (let i = 0; i < 16000; i++) {
+        const shade = 26 + Math.floor(Math.random() * 34);
+        ctx.fillStyle = `rgb(${shade}, ${shade + 4}, ${shade + 2})`;
+        ctx.fillRect(Math.random() * 512, Math.random() * 512, 2.5, 2.5);
+      }
+      // Concrete slab / range lane markings so ground motion and horizon are always unmistakable
+      ctx.strokeStyle = 'rgba(148, 163, 150, 0.22)';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(4, 4, 504, 504);
+      ctx.fillStyle = 'rgba(200, 215, 200, 0.08)';
+      ctx.fillRect(140, 0, 65, 512);
+      ctx.fillRect(305, 0, 65, 512);
+      const tex = new THREE.CanvasTexture(c);
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(90, 90);
+      return tex;
+    }
+
+    function createGunmetalTexture() {
+      const c = document.createElement('canvas');
+      c.width = 256; c.height = 256;
+      const ctx = c.getContext('2d');
+      // Blued / parkerized Russian ordnance steel (вороненая оружейная сталь 6П49 КОРД)
+      ctx.fillStyle = 'rgb(26, 30, 32)';
+      ctx.fillRect(0, 0, 256, 256);
+      for (let i = 0; i < 12000; i++) {
+        const v = (Math.random() - 0.5) * 14;
+        ctx.fillStyle = `rgb(${Math.max(14, 26 + v)}, ${Math.max(16, 30 + v)}, ${Math.max(18, 32 + v)})`;
+        ctx.fillRect(Math.random() * 256, Math.random() * 256, 2, 1.5);
+      }
+      // Subtle machined receiver striations & metallic edge wear
+      for (let y = 0; y < 256; y += 16) {
+        ctx.fillStyle = 'rgba(75, 85, 92, 0.14)';
+        ctx.fillRect(0, y, 256, 1);
+      }
+      const tex = new THREE.CanvasTexture(c);
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      return tex;
+    }
+
+    const oliveTex = createOliveArmorTexture();
+    const armorBumpTex = createArmorBumpTexture();
+    const rubberTex = createRubberTexture();
+    const gunmetalTex = createGunmetalTexture();
+    const paradeMarkTex = createParadeNumberTexture();
+    const headlightLensTex = createHeadlightLensTexture();
+    const trackTex = createTrackPadTexture();
+    const asphaltTex = createWetAsphaltTexture();
+
+    // Shared Materials Registry (Light-Absorbing Deep Matte Military Finish)
+    const materials = {
+      kordGunmetal: new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        map: gunmetalTex,
+        bumpMap: armorBumpTex,
+        bumpScale: 0.014,
+        roughnessMap: armorBumpTex,
+        roughness: 0.58,
+        metalness: 0.65
+      }),
+      brassShell: new THREE.MeshStandardMaterial({
+        color: 0xd97706,
+        roughness: 0.32,
+        metalness: 0.85
+      }),
+      armorOlive: new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        map: oliveTex,
+        bumpMap: armorBumpTex,
+        bumpScale: 0.016,
+        roughnessMap: armorBumpTex,
+        roughness: 0.89,
+        metalness: 0.08
+      }),
+      eraOlive: new THREE.MeshStandardMaterial({
+        color: 0xf4f7f2,
+        map: oliveTex,
+        bumpMap: armorBumpTex,
+        bumpScale: 0.014,
+        roughnessMap: armorBumpTex,
+        roughness: 0.86,
+        metalness: 0.10
+      }),
+      paradeMark: new THREE.MeshStandardMaterial({
+        map: paradeMarkTex,
+        bumpMap: armorBumpTex,
+        bumpScale: 0.01,
+        roughness: 0.85,
+        metalness: 0.06
+      }),
+      darkSteel: new THREE.MeshStandardMaterial({
+        color: 0xdce3d8,
+        map: oliveTex,
+        bumpMap: armorBumpTex,
+        bumpScale: 0.012,
+        roughnessMap: armorBumpTex,
+        roughness: 0.84,
+        metalness: 0.14
+      }),
+      gunBarrelMetal: new THREE.MeshStandardMaterial({
+        color: 0xe8efe4,
+        map: oliveTex,
+        bumpMap: armorBumpTex,
+        bumpScale: 0.01,
+        roughnessMap: armorBumpTex,
+        roughness: 0.85,
+        metalness: 0.12
+      }),
+      rubberBlack: new THREE.MeshStandardMaterial({
+        color: 0x141615,
+        map: rubberTex,
+        bumpMap: rubberTex,
+        bumpScale: 0.015,
+        roughness: 0.96,
+        metalness: 0.02
+      }),
+      trackMat: new THREE.MeshStandardMaterial({
+        map: trackTex,
+        bumpMap: trackTex,
+        bumpScale: 0.025,
+        roughness: 0.88,
+        metalness: 0.28
+      }),
+      opticsGlass: new THREE.MeshStandardMaterial({
+        color: 0x064e3b,
+        emissive: 0x022c22,
+        emissiveIntensity: 0.35,
+        roughness: 0.15,
+        metalness: 0.85
+      }),
+      headlightWarm: new THREE.MeshStandardMaterial({
+        color: 0xfef08a,
+        map: headlightLensTex,
+        emissive: 0xf59e0b,
+        emissiveMap: headlightLensTex,
+        emissiveIntensity: 2.2,
+        roughness: 0.22,
+        metalness: 0.1
+      }),
+      turbineHot: new THREE.MeshStandardMaterial({
+        color: 0x1c1917,
+        emissive: 0xea580c,
+        emissiveIntensity: 0.25,
+        roughness: 0.75,
+        metalness: 0.35
+      }),
+      whiteTrim: new THREE.MeshStandardMaterial({
+        color: 0xd8dee3,
+        roughness: 0.82,
+        metalness: 0.04
+      })
+    };
+
+    // Wet 1 km x 1 km Proving Ground Plane (Учебный танковый полигон 1000м x 1000м)
+    const RANGE_SIZE = 1000;
+    const RANGE_HALF = RANGE_SIZE / 2; // -500m to +500m
+    asphaltTex.repeat.set(90, 90);
+    const groundGeo = new THREE.PlaneGeometry(RANGE_SIZE, RANGE_SIZE);
+    const groundMat = new THREE.MeshStandardMaterial({
+      map: asphaltTex,
+      roughness: 0.56,
+      metalness: 0.14
+    });
+    const groundMesh = new THREE.Mesh(groundGeo, groundMat);
+    groundMesh.rotation.x = -Math.PI / 2;
+    groundMesh.receiveShadow = true;
+    scene.add(groundMesh);
+
+    const gridHelper = new THREE.GridHelper(RANGE_SIZE, 100, 0x648268, 0x3b4d3e);
+    gridHelper.position.y = 0.015;
+    gridHelper.material.opacity = 0.48;
+    gridHelper.material.transparent = true;
+    scene.add(gridHelper);
+
+    // =========================================================================
+    // 2B. PROCEDURAL PROVING GROUND TARGET RANGE (МИШЕННОЕ ПОЛЕ ПОЛИГОНА)
+    // =========================================================================
+    const rangeEnvironmentGroup = new THREE.Group();
+    scene.add(rangeEnvironmentGroup);
+
+    const rangeTargets = [];
+    let targetsDestroyedCount = 0;
+
+    function createRangeTargetTexture() {
+      const c = document.createElement('canvas');
+      c.width = 256; c.height = 256;
+      const ctx = c.getContext('2d');
+      // High-visibility olive/dark-green armored target silhouette with white aiming border & bullseye
+      ctx.fillStyle = '#1e281d';
+      ctx.fillRect(0, 0, 256, 256);
+      // Outer white range visibility border
+      ctx.strokeStyle = '#f1f5f9';
+      ctx.lineWidth = 10;
+      ctx.strokeRect(12, 12, 232, 232);
+      // Tank silhouette shape
+      ctx.fillStyle = '#2d3b2b';
+      ctx.fillRect(28, 120, 200, 108);
+      ctx.beginPath();
+      ctx.arc(128, 120, 64, Math.PI, 0, false);
+      ctx.fill();
+      // Tactical orange/white aiming cross & rings in center
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.arc(128, 134, 46, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(128, 134, 20, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(64, 134); ctx.lineTo(192, 134);
+      ctx.moveTo(128, 70); ctx.lineTo(128, 198);
+      ctx.stroke();
+      return c;
+    }
+
+    function buildSingleRangeTarget(x, z) {
+      const targetRoot = new THREE.Group();
+      targetRoot.position.set(x, 0, z);
+
+      // Flat steel ground baseplate (sits flush on ground y=0.02 so tank tracks never clip into a raised mound)
+      const basePlate = new THREE.Mesh(
+        new THREE.BoxGeometry(2.6, 0.04, 0.9),
+        materials.darkSteel
+      );
+      basePlate.position.set(0, 0.02, 0.0);
+      targetRoot.add(basePlate);
+
+      // Hinged pivot group at ground level (y=0.05) so the target falls flat onto the ground (-90 deg) when hit or rammed
+      const hingeGroup = new THREE.Group();
+      hingeGroup.position.set(0, 0.05, 0);
+      targetRoot.add(hingeGroup);
+
+      // Steel support legs
+      [-0.85, 0.85].forEach(lx => {
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.10, 2.3, 0.10), materials.darkSteel);
+        post.position.set(lx, 1.15, -0.08);
+        hingeGroup.add(post);
+      });
+
+      // Individual mutable CanvasTexture per target so 12.7mm Kord hits punch real bullet holes into it!
+      const baseCanvas = createRangeTargetTexture();
+      const targetCanvas = document.createElement('canvas');
+      targetCanvas.width = 256; targetCanvas.height = 256;
+      const targetCtx = targetCanvas.getContext('2d');
+      targetCtx.drawImage(baseCanvas, 0, 0);
+      const targetTex = new THREE.CanvasTexture(targetCanvas);
+
+      const boardMat = new THREE.MeshStandardMaterial({
+        map: targetTex,
+        emissive: 0xfffbeb,
+        emissiveMap: targetTex,
+        emissiveIntensity: 0.48,
+        roughness: 0.55,
+        metalness: 0.12
+      });
+
+      const boardMesh = new THREE.Mesh(new THREE.BoxGeometry(3.4, 2.8, 0.14), boardMat);
+      boardMesh.position.set(0, 1.55, 0);
+      boardMesh.castShadow = true;
+      boardMesh.receiveShadow = true;
+      hingeGroup.add(boardMesh);
+
+      // High-intensity thermal beacon strip on top for unmistakable visibility in FLIR / Sosna-U mode
+      const beacon = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.22, 0.22), materials.turbineHot);
+      beacon.position.set(0, 3.08, 0);
+      hingeGroup.add(beacon);
+
+      rangeEnvironmentGroup.add(targetRoot);
+
+      const targetObj = {
+        root: targetRoot,
+        hinge: hingeGroup,
+        boardMesh,
+        canvas: targetCanvas,
+        ctx: targetCtx,
+        tex: targetTex,
+        baseCanvas,
+        fallen: false,
+        bulletHoles: 0
+      };
+      boardMesh.userData.targetObj = targetObj;
+      rangeTargets.push(targetObj);
+    }
+
+    // Populate 1km x 1km Proving Ground with 28 targets & build Perimeter Fence with Barbed Wire
+    function createChainlinkFenceTexture() {
+      const c = document.createElement('canvas');
+      c.width = 256; c.height = 256;
+      const ctx = c.getContext('2d');
+      ctx.clearRect(0, 0, 256, 256);
+      // Diamond chain-link wire mesh
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.65)';
+      ctx.lineWidth = 2;
+      const step = 24;
+      for (let i = -256; i < 512; i += step) {
+        ctx.beginPath(); ctx.moveTo(i, 48); ctx.lineTo(i + 256, 256); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(i + 256, 48); ctx.lineTo(i, 256); ctx.stroke();
+      }
+      // Horizontal tension cables
+      ctx.strokeStyle = 'rgba(203, 213, 225, 0.85)';
+      ctx.lineWidth = 3;
+      [52, 145, 250].forEach(y => {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(256, y); ctx.stroke();
+      });
+      // Top 3 strands of Barbed Wire + Razor Concertina Coils + X-Barbs
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = 2.2;
+      [10, 24, 38].forEach(y => {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(256, y); ctx.stroke();
+        for (let bx = 12; bx < 256; bx += 22) {
+          ctx.beginPath();
+          ctx.moveTo(bx - 4, y - 5); ctx.lineTo(bx + 4, y + 5);
+          ctx.moveTo(bx + 4, y - 5); ctx.lineTo(bx - 4, y + 5);
+          ctx.stroke();
+        }
+      });
+      // Spiral concertina wire loops along top edge
+      ctx.strokeStyle = 'rgba(226, 232, 240, 0.78)';
+      ctx.lineWidth = 1.8;
+      for (let cx = 0; cx <= 256; cx += 18) {
+        ctx.beginPath(); ctx.arc(cx, 24, 14, 0, Math.PI * 2); ctx.stroke();
+      }
+      const tex = new THREE.CanvasTexture(c);
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      return tex;
+    }
+
+    (function populateProvingGround() {
+      // 1. Build 1km x 1km Perimeter Security Fence with Concrete Posts & Barbed Wire (-500m to +500m)
+      const fenceTex = createChainlinkFenceTexture();
+      fenceTex.repeat.set(125, 1);
+      const fenceMat = new THREE.MeshStandardMaterial({
+        map: fenceTex,
+        transparent: true,
+        alphaTest: 0.15,
+        side: THREE.DoubleSide,
+        roughness: 0.55,
+        metalness: 0.65
+      });
+
+      const fenceHeight = 3.8;
+      const postMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.85, metalness: 0.2 });
+
+      // North (Z = +500), South (Z = -500), East (X = +500), West (X = -500) fence walls
+      [
+        { pos: [0, fenceHeight / 2, RANGE_HALF], rotY: 0 },
+        { pos: [0, fenceHeight / 2, -RANGE_HALF], rotY: 0 },
+        { pos: [RANGE_HALF, fenceHeight / 2, 0], rotY: Math.PI / 2 },
+        { pos: [-RANGE_HALF, fenceHeight / 2, 0], rotY: Math.PI / 2 }
+      ].forEach(w => {
+        const wall = new THREE.Mesh(new THREE.PlaneGeometry(RANGE_SIZE, fenceHeight), fenceMat);
+        wall.position.set(w.pos[0], w.pos[1], w.pos[2]);
+        wall.rotation.y = w.rotY;
+        rangeEnvironmentGroup.add(wall);
+      });
+
+      // Concrete/Steel Fence Posts with Angled Barbed-Wire V-Brackets every 25m around perimeter
+      const postGeo = new THREE.BoxGeometry(0.24, fenceHeight, 0.24);
+      const armGeo = new THREE.BoxGeometry(0.12, 0.95, 0.12);
+      for (let d = -RANGE_HALF; d <= RANGE_HALF; d += 25) {
+        [
+          [d, RANGE_HALF], [d, -RANGE_HALF],
+          [RANGE_HALF, d], [-RANGE_HALF, d]
+        ].forEach(([px, pz]) => {
+          const post = new THREE.Mesh(postGeo, postMat);
+          post.position.set(px, fenceHeight / 2, pz);
+          const arm = new THREE.Mesh(armGeo, postMat);
+          arm.position.set(px, fenceHeight + 0.3, pz);
+          arm.rotation.z = 0.45;
+          rangeEnvironmentGroup.add(post, arm);
+        });
+      }
+
+      // 2. Scatter 28 Armored Pop-Up Targets across the 1km x 1km Proving Ground (including dead-ahead targets right in the initial Sosna-U view!)
+      const targetCoords = [
+        [0, 32], [-7, 26], [8, 28], [-15, 42], [14, 45],
+        [0, 64], [-18, 68], [16, 74], [-34, 82], [32, 86],
+        [-52, 40], [55, 52], [-42, 118], [40, 128], [0, 140],
+        [-80, 95], [84, 108], [-68, 175], [64, 185], [-12, 210],
+        [-130, 155], [135, 170], [-115, 260], [105, 275], [0, 300],
+        [-55, -75], [60, -85], [0, -125]
+      ];
+      targetCoords.forEach(([tx, tz]) => buildSingleRangeTarget(tx, tz));
+
+      // 3. Painted Ground Distance Rings around the range (flush on ground y=0.008 so the tank never clips into mounds)
+      [50, 100, 200, 300, 400].forEach(rad => {
+        const ring = new THREE.Mesh(
+          new THREE.RingGeometry(rad - 0.25, rad + 0.25, 64),
+          new THREE.MeshBasicMaterial({ color: 0x3b4d3e, side: THREE.DoubleSide, transparent: true, opacity: 0.35 })
+        );
+        ring.rotation.x = -Math.PI / 2;
+        ring.position.y = 0.008;
+        rangeEnvironmentGroup.add(ring);
+      });
+    })();
+
+    // Puncture bullet hole on target canvas & spawn sparks when hit by 12.7mm Kord
+    function registerKordBulletHit(targetObj, hitPointWorld) {
+      if (targetObj.fallen) return;
+      targetObj.bulletHoles++;
+
+      // Convert world hit point to board local coordinates (-1.7..+1.7 X, -1.4..+1.4 Y)
+      const localPt = targetObj.boardMesh.worldToLocal(hitPointWorld.clone());
+      const u = THREE.MathUtils.clamp((localPt.x / 3.4) + 0.5, 0.05, 0.95);
+      const v = THREE.MathUtils.clamp(0.5 - (localPt.y / 2.8), 0.05, 0.95);
+      const cx = u * 256;
+      const cy = v * 256;
+
+      const ctx = targetObj.ctx;
+      // Scorched crater rim
+      const g = ctx.createRadialGradient(cx, cy, 2, cx, cy, 14);
+      g.addColorStop(0, '#050505');
+      g.addColorStop(0.45, '#1c1917');
+      g.addColorStop(0.75, '#78716c');
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(cx, cy, 14, 0, Math.PI * 2); ctx.fill();
+      // Jagged bright metal spall marks & black hole center
+      ctx.fillStyle = '#d6d3d1';
+      for (let s = 0; s < 5; s++) {
+        const a = Math.random() * Math.PI * 2;
+        ctx.fillRect(cx + Math.cos(a) * 6, cy + Math.sin(a) * 6, 3, 3);
+      }
+      ctx.fillStyle = '#000000';
+      ctx.beginPath(); ctx.arc(cx, cy, 5.5, 0, Math.PI * 2); ctx.fill();
+      targetObj.tex.needsUpdate = true;
+
+      // Also place a 3D dark puncture decal disc on the board face so it's visible even from steep angles
+      const holeDisc = new THREE.Mesh(
+        new THREE.CircleGeometry(0.085, 10),
+        new THREE.MeshBasicMaterial({ color: 0x050505, side: THREE.DoubleSide })
+      );
+      holeDisc.position.set(localPt.x, localPt.y, 0.076);
+      targetObj.boardMesh.add(holeDisc);
+
+      // Impact metallic shudder
+      gsap.fromTo(targetObj.hinge.rotation, { x: -0.06 }, { x: 0, duration: 0.18, ease: 'elastic.out(1.2, 0.3)' });
+
+      // Impact sparks & dust puff at hit point
+      for (let i = 0; i < 5; i++) {
+        spawnParticleSprite(
+          fireballTex, 0xfef08a, THREE.AdditiveBlending,
+          hitPointWorld.clone(),
+          new THREE.Vector3((Math.random() - 0.5) * 6, 1.5 + Math.random() * 4, -2 - Math.random() * 4),
+          0.22, 0.05, 0.18, 0.9, -6, 1.0
+        );
+      }
+      spawnParticleSprite(
+        smokeCloudTex, 0xa8a29e, THREE.NormalBlending,
+        hitPointWorld.clone(),
+        new THREE.Vector3((Math.random() - 0.5) * 2, 0.8 + Math.random() * 1.5, -1),
+        0.35, 1.2, 0.65, 0.92, 0.4, 0.65
+      );
+    }
+
+    // Knock down target when hit by 125mm APFSDS shell
+    function knockDownRangeTarget(targetObj, hitPointWorld) {
+      if (targetObj.fallen) return;
+      targetObj.fallen = true;
+      targetsDestroyedCount++;
+
+      // Violent fiery explosion & smoke plume on the target
+      for (let i = 0; i < 14; i++) {
+        spawnParticleSprite(
+          fireballTex, i < 5 ? 0xffffff : 0xf97316, THREE.AdditiveBlending,
+          hitPointWorld.clone(),
+          new THREE.Vector3((Math.random() - 0.5) * 12, 2 + Math.random() * 9, (Math.random() - 0.5) * 12),
+          1.2, 3.6, 0.32 + Math.random() * 0.2, 0.88, 1.0, 1.0
+        );
+      }
+      for (let s = 0; s < 18; s++) {
+        spawnParticleSprite(
+          smokeCloudTex, 0x57534e, THREE.NormalBlending,
+          hitPointWorld.clone(),
+          new THREE.Vector3((Math.random() - 0.5) * 8, 1.5 + Math.random() * 6, (Math.random() - 0.5) * 8),
+          1.4, 4.8, 1.6 + Math.random() * 1.2, 0.92, 1.1, 0.85
+        );
+      }
+
+      // Slam target board flat backward onto the ground (-90 deg)
+      gsap.to(targetObj.hinge.rotation, {
+        x: -Math.PI / 2,
+        duration: 0.42,
+        ease: 'bounce.out'
+      });
+
+      // Auto pop-up target again after 9 seconds so the proving ground stays active
+      setTimeout(() => {
+        if (!targetObj.fallen) return;
+        gsap.to(targetObj.hinge.rotation, {
+          x: 0,
+          duration: 0.65,
+          ease: 'back.out(1.4)',
+          onComplete: () => { targetObj.fallen = false; }
+        });
+      }, 9000);
+    }
+
+    function resetRangeTargets() {
+      targetsDestroyedCount = 0;
+      rangeTargets.forEach(t => {
+        t.fallen = false;
+        t.bulletHoles = 0;
+        gsap.to(t.hinge.rotation, { x: 0, duration: 0.45, ease: 'back.out(1.5)' });
+        t.ctx.drawImage(t.baseCanvas, 0, 0);
+        t.tex.needsUpdate = true;
+        // Remove 3D bullet hole decals
+        for (let i = t.boardMesh.children.length - 1; i >= 0; i--) {
+          t.boardMesh.remove(t.boardMesh.children[i]);
+        }
+      });
+    }
+
+    // =========================================================================
+    // 3. HIERARCHICAL T-80BVM PROCEDURAL 3D ARCHITECTURE
+    // =========================================================================
+    const tankRoot = new THREE.Group();
+    scene.add(tankRoot);
+
+    // Sub-groups for animation & dynamic exploded view
+    const chassisGroup = new THREE.Group();
+    const hullBaseGroup = new THREE.Group();
+    const glacisEraGroup = new THREE.Group();
+    const leftSkirtGroup = new THREE.Group();
+    const rightSkirtGroup = new THREE.Group();
+    const rearSlatGroup = new THREE.Group();
+    const turbinePackGroup = new THREE.Group();
+    const autoloaderGroup = new THREE.Group();
+
+    const turretGroup = new THREE.Group();
+    turretGroup.position.set(0, 1.38, 0.15);
+
+    const turretShellGroup = new THREE.Group();
+    const turretLeftEraGroup = new THREE.Group();
+    const turretRightEraGroup = new THREE.Group();
+    const turretRoofEraGroup = new THREE.Group();
+    const sosnaSightGroup = new THREE.Group();
+    const kordMgGroup = new THREE.Group();
+
+    const gunElevationGroup = new THREE.Group();
+    gunElevationGroup.position.set(0, 0.24, 1.15);
+    const gunRecoilGroup = new THREE.Group();
+    gunElevationGroup.add(gunRecoilGroup);
+
+    chassisGroup.add(
+      hullBaseGroup,
+      glacisEraGroup,
+      leftSkirtGroup,
+      rightSkirtGroup,
+      rearSlatGroup,
+      turbinePackGroup,
+      autoloaderGroup,
+      turretGroup
+    );
+    turretGroup.add(
+      turretShellGroup,
+      turretLeftEraGroup,
+      turretRightEraGroup,
+      turretRoofEraGroup,
+      sosnaSightGroup,
+      kordMgGroup,
+      gunElevationGroup
+    );
+    tankRoot.add(chassisGroup);
+
+    const wheelMeshes = [];
+    const headlightSpotlights = [];
+    const headlightGlowSprites = [];
+
+    function enableShadow(obj) {
+      obj.traverse(c => {
+        if (c.isMesh) {
+          c.castShadow = true;
+          c.receiveShadow = true;
+        }
+      });
+    }
+
+    // -------------------------------------------------------------------------
+    // 3A. HULL BASE, GLACIS, TOW HOOKS, DUAL HEADLIGHTS & MUD FLAPS
+    // -------------------------------------------------------------------------
+    (function buildHullAndRunningGear() {
+      // Main armored hull tub
+      const hullCore = new THREE.Mesh(new THREE.BoxGeometry(2.36, 0.72, 6.55), materials.armorOlive);
+      hullCore.position.set(0, 0.88, 0);
+      hullBaseGroup.add(hullCore);
+
+      // Sloped upper glacis plate
+      const glacisPlate = new THREE.Mesh(new THREE.BoxGeometry(2.34, 0.18, 2.05), materials.armorOlive);
+      glacisPlate.position.set(0, 1.14, 2.38);
+      glacisPlate.rotation.x = 0.34; // ~20 deg slope
+      hullBaseGroup.add(glacisPlate);
+
+      // Lower front glacis + rubber mud apron
+      const lowerGlacis = new THREE.Mesh(new THREE.BoxGeometry(2.32, 0.42, 0.9), materials.armorOlive);
+      lowerGlacis.position.set(0, 0.65, 3.05);
+      lowerGlacis.rotation.x = -0.45;
+      hullBaseGroup.add(lowerGlacis);
+
+      const frontRubberApron = new THREE.Mesh(new THREE.BoxGeometry(2.30, 0.28, 0.04), materials.rubberBlack);
+      frontRubberApron.position.set(0, 0.42, 3.38);
+      frontRubberApron.rotation.x = 0.08;
+      hullBaseGroup.add(frontRubberApron);
+
+      // Driver's closed sliding hatch & center wide-angle periscope TNPO-160 (UNCREWED)
+      const driverHatch = new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.09, 0.48), materials.armorOlive);
+      driverHatch.position.set(0, 1.30, 1.88);
+      hullBaseGroup.add(driverHatch);
+
+      for (let i = -1; i <= 1; i++) {
+        const peri = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.07, 0.12), materials.opticsGlass);
+        peri.position.set(i * 0.18, 1.32, 2.12);
+        hullBaseGroup.add(peri);
+      }
+
+      // Forged Tow Hooks on Front Hull
+      [-0.78, 0.78].forEach(x => {
+        const hook = new THREE.Mesh(new THREE.TorusGeometry(0.09, 0.028, 8, 16, Math.PI * 1.4), materials.darkSteel);
+        hook.position.set(x, 0.74, 3.32);
+        hook.rotation.y = Math.PI / 2;
+        hullBaseGroup.add(hook);
+      });
+
+      // Dual Headlights (ФГ-127) on Front Right & Left Corners with Welded Tubular Protective Cages & Switchable Spotlights
+      const glowCanvas = document.createElement('canvas');
+      glowCanvas.width = 128; glowCanvas.height = 128;
+      const gCtx = glowCanvas.getContext('2d');
+      const gGrad = gCtx.createRadialGradient(64, 64, 4, 64, 64, 60);
+      gGrad.addColorStop(0, 'rgba(255, 251, 235, 0.95)');
+      gGrad.addColorStop(0.35, 'rgba(251, 191, 36, 0.55)');
+      gGrad.addColorStop(1, 'rgba(245, 158, 11, 0)');
+      gCtx.fillStyle = gGrad;
+      gCtx.fillRect(0, 0, 128, 128);
+      const haloTex = new THREE.CanvasTexture(glowCanvas);
+
+      [-0.92, 0.92].forEach(x => {
+        const lampCluster = new THREE.Group();
+        lampCluster.position.set(x, 1.15, 2.94);
+
+        // Lower main warm halogen headlight ФГ-127 (hollow housing cup + bezel + full domed circular glowing lens)
+        const mainBody = new THREE.Mesh(new THREE.CylinderGeometry(0.088, 0.068, 0.11, 24), materials.armorOlive);
+        mainBody.rotation.x = Math.PI / 2;
+        mainBody.position.z = -0.015;
+        const mainBezel = new THREE.Mesh(new THREE.TorusGeometry(0.092, 0.010, 12, 24), materials.darkSteel);
+        mainBezel.position.z = 0.045;
+        // Full domed circular Fresnel glass lens protruding in front of housing so the entire round lamp glows
+        const mainLens = new THREE.Mesh(
+          new THREE.SphereGeometry(0.089, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.5),
+          materials.headlightWarm
+        );
+        mainLens.rotation.x = Math.PI / 2;
+        mainLens.scale.set(1, 0.42, 1);
+        mainLens.position.z = 0.042;
+
+        // Upper small circular convoy / marker light (ГСТ-64) with full round glowing lens
+        const topBody = new THREE.Mesh(new THREE.CylinderGeometry(0.046, 0.038, 0.08, 18), materials.armorOlive);
+        topBody.rotation.x = Math.PI / 2;
+        topBody.position.set(-Math.sign(x) * 0.03, 0.145, -0.015);
+        const topBezel = new THREE.Mesh(new THREE.TorusGeometry(0.046, 0.006, 10, 18), materials.darkSteel);
+        topBezel.position.set(-Math.sign(x) * 0.03, 0.145, 0.026);
+        const topLens = new THREE.Mesh(
+          new THREE.SphereGeometry(0.044, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.5),
+          materials.headlightWarm
+        );
+        topLens.rotation.x = Math.PI / 2;
+        topLens.scale.set(1, 0.42, 1);
+        topLens.position.set(-Math.sign(x) * 0.03, 0.145, 0.025);
+
+        // Authentic Welded Tubular Steel Guard Cage (matching close-up photo)
+        const cageGroup = new THREE.Group();
+        [-0.08, 0.02, 0.12, 0.21].forEach(cy => {
+          const hBar = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.007, 0.26, 8), materials.armorOlive);
+          hBar.rotation.z = Math.PI / 2;
+          hBar.position.set(0, cy, 0.105);
+          cageGroup.add(hBar);
+        });
+        [-0.125, 0.125].forEach(cx => {
+          const vRod = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.33, 8), materials.armorOlive);
+          vRod.position.set(cx, 0.065, 0.105);
+          const sideBrace = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.007, 0.18, 8), materials.armorOlive);
+          sideBrace.rotation.x = Math.PI / 2;
+          sideBrace.position.set(cx, 0.21, 0.02);
+          const botBrace = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.007, 0.18, 8), materials.armorOlive);
+          botBrace.rotation.x = Math.PI / 2;
+          botBrace.position.set(cx, -0.08, 0.02);
+          cageGroup.add(vRod, sideBrace, botBrace);
+        });
+
+        // Volumetric Warm Halo Sprite centered on the main circular lens
+        const haloMat = new THREE.SpriteMaterial({
+          map: haloTex,
+          color: 0xfef08a,
+          transparent: true,
+          opacity: 0.78,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false
+        });
+        const haloSprite = new THREE.Sprite(haloMat);
+        haloSprite.scale.set(0.42, 0.42, 1);
+        haloSprite.position.set(0, 0, 0.082);
+        headlightGlowSprites.push(haloSprite);
+
+        // Real Three.js SpotLight casting warm halogen beam onto the glacis & wet asphalt road
+        const spot = new THREE.SpotLight(0xffdfa0, 2.8, 22, Math.PI / 4.2, 0.55, 1.4);
+        spot.position.set(0, 0, 0.09);
+        const spotTarget = new THREE.Object3D();
+        spotTarget.position.set(x * 0.3, -1.05, 9.5);
+        lampCluster.add(spotTarget);
+        spot.target = spotTarget;
+        headlightSpotlights.push(spot);
+
+        lampCluster.add(mainBody, mainBezel, mainLens, topBody, topBezel, topLens, cageGroup, haloSprite, spot);
+        hullBaseGroup.add(lampCluster);
+      });
+
+      // Forward Rounded Fender Mud Flaps & Full-Length Over-Track Armored Sponson Decks (Надгусеничные полки)
+      [-1, 1].forEach(dir => {
+        // Full-length armored fender deck covering the top of the tracks completely
+        const fenderDeck = new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.08, 6.56), materials.armorOlive);
+        fenderDeck.position.set(dir * 1.44, 1.22, 0.0);
+        hullBaseGroup.add(fenderDeck);
+
+        // Stowage / fuel-cell armored boxes along the upper sponson deck (above the tracks)
+        for (let s = 0; s < 4; s++) {
+          const stowBox = new THREE.Mesh(new THREE.BoxGeometry(0.50, 0.16, 1.05), materials.armorOlive);
+          stowBox.position.set(dir * 1.40, 1.32, 1.25 - s * 1.15);
+          hullBaseGroup.add(stowBox);
+        }
+
+        // Front curved armored mudguard hood with rubber splash flap (angled Up & Forward over the front idler)
+        const frontHood = new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.07, 0.56), materials.armorOlive);
+        frontHood.position.set(dir * 1.44, 1.14, 3.42);
+        frontHood.rotation.x = 0.28;
+        hullBaseGroup.add(frontHood);
+
+        const frontFlap = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.30, 0.035), materials.rubberBlack);
+        frontFlap.position.set(dir * 1.44, 0.92, 3.68);
+        frontFlap.rotation.x = -0.12;
+        hullBaseGroup.add(frontFlap);
+
+        // Rear mudguard hood over the drive sprocket (angled Up & Rearward clear of the sprocket)
+        const rearHood = new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.07, 0.54), materials.armorOlive);
+        rearHood.position.set(dir * 1.44, 1.14, -3.40);
+        rearHood.rotation.x = -0.28;
+        hullBaseGroup.add(rearHood);
+      });
+
+      // -----------------------------------------------------------------------
+      // 3B. T-80 SIGNATURE 6 STAMPED DUAL DISH ROAD WHEELS & TRUE EXTRUDED BELT TRACKS
+      // -----------------------------------------------------------------------
+      const wheelZPositions = [2.28, 1.38, 0.48, -0.42, -1.32, -2.22];
+
+      // Build a single continuous closed-loop Track Belt Shape in the Y-Z plane and extrude along X
+      function createContinuousTrackBeltMesh(trackWidth) {
+        const outer = new THREE.Shape();
+        // Start at bottom rear under 6th road wheel (Z = -2.22, Y = 0.005)
+        outer.moveTo(-2.22, 0.005);
+        // Bottom ground-contact run forward to 1st road wheel (Z = +2.28, Y = 0.005)
+        outer.lineTo(2.28, 0.005);
+        // Angled front climb up to bottom of front idler (Z = 3.05, Y = 0.355)
+        outer.lineTo(3.05, 0.355);
+        // Semicircular wrap around Front Idler (center Z = 3.05, Y = 0.675, outer radius = 0.32)
+        outer.absarc(3.05, 0.675, 0.32, -Math.PI / 2, Math.PI / 2, false);
+        // Top return run backward to top of Rear Drive Sprocket (Z = -2.98, Y = 0.995)
+        outer.lineTo(-2.98, 0.995);
+        // Semicircular wrap around Rear Sprocket (center Z = -2.98, Y = 0.675, outer radius = 0.32)
+        outer.absarc(-2.98, 0.675, 0.32, Math.PI / 2, (3 * Math.PI) / 2, false);
+        // Angled rear descent back to 6th road wheel bottom
+        outer.closePath();
+
+        // Inner hole (thickness = 0.068m) so the track is a true hollow endless belt
+        const inner = new THREE.Path();
+        inner.moveTo(-2.22, 0.073);
+        inner.lineTo(2.28, 0.073);
+        inner.lineTo(3.05, 0.423);
+        inner.absarc(3.05, 0.675, 0.252, -Math.PI / 2, Math.PI / 2, false);
+        inner.lineTo(-2.98, 0.927);
+        inner.absarc(-2.98, 0.675, 0.252, Math.PI / 2, (3 * Math.PI) / 2, false);
+        inner.closePath();
+        outer.holes.push(inner);
+
+        const extrudeGeo = new THREE.ExtrudeGeometry(outer, {
+          depth: trackWidth,
+          bevelEnabled: false,
+          curveSegments: 28
+        });
+        // Rotate extruded Y-Z shape so X is width, Y is up, Z is forward
+        extrudeGeo.rotateY(Math.PI / 2);
+        // Center along X
+        extrudeGeo.translate(-trackWidth / 2, 0, 0);
+        return new THREE.Mesh(extrudeGeo, materials.trackMat);
+      }
+
+      [-1.38, 1.38].forEach(sideX => {
+        const trackWidth = 0.56;
+        const beltMesh = createContinuousTrackBeltMesh(trackWidth);
+        beltMesh.position.set(sideX, 0, 0);
+        hullBaseGroup.add(beltMesh);
+
+        // 6 Stamped Dual Road Wheels per side (Radius = 0.345 so they sit cleanly on the inner track face y=0.073 without poking through)
+        wheelZPositions.forEach(zPos => {
+          // Torsion bar suspension arm & axle connecting hull to wheel hub
+          const axle = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.065, 0.32, 12), materials.darkSteel);
+          axle.rotation.z = Math.PI / 2;
+          axle.position.set(sideX - Math.sign(sideX) * 0.16, 0.42, zPos);
+          hullBaseGroup.add(axle);
+
+          const wGroup = new THREE.Group();
+          wGroup.position.set(sideX, 0.42, zPos);
+
+          const tire = new THREE.Mesh(new THREE.CylinderGeometry(0.345, 0.345, 0.48, 24), materials.rubberBlack);
+          tire.rotation.z = Math.PI / 2;
+
+          const dish = new THREE.Mesh(new THREE.CylinderGeometry(0.255, 0.255, 0.50, 20), materials.armorOlive);
+          dish.rotation.z = Math.PI / 2;
+
+          const recess = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.14, 0.52, 16), materials.armorOlive);
+          recess.rotation.z = Math.PI / 2;
+
+          const hubCap = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.55, 12), materials.armorOlive);
+          hubCap.rotation.z = Math.PI / 2;
+
+          wGroup.add(tire, dish, recess, hubCap);
+          hullBaseGroup.add(wGroup);
+          wheelMeshes.push(wGroup);
+        });
+
+        // Front Idler Wheel & Rear Drive Sprocket (Radius = 0.250 so they fit cleanly inside the 0.252 inner track wrap!)
+        const idlerGroup = new THREE.Group();
+        idlerGroup.position.set(sideX, 0.675, 3.05);
+        const idler = new THREE.Mesh(new THREE.CylinderGeometry(0.250, 0.250, 0.48, 20), materials.armorOlive);
+        idler.rotation.z = Math.PI / 2;
+        const idlerHub = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.10, 0.54, 12), materials.armorOlive);
+        idlerHub.rotation.z = Math.PI / 2;
+        idlerGroup.add(idler, idlerHub);
+        hullBaseGroup.add(idlerGroup);
+        wheelMeshes.push(idlerGroup);
+
+        const sprocketGroup = new THREE.Group();
+        sprocketGroup.position.set(sideX, 0.675, -2.98);
+        const sprocket = new THREE.Mesh(new THREE.CylinderGeometry(0.250, 0.250, 0.48, 16), materials.armorOlive);
+        sprocket.rotation.z = Math.PI / 2;
+        const sprocketHub = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.54, 12), materials.armorOlive);
+        sprocketHub.rotation.z = Math.PI / 2;
+        sprocketGroup.add(sprocket, sprocketHub);
+        hullBaseGroup.add(sprocketGroup);
+        wheelMeshes.push(sprocketGroup);
+      });
+
+      // -----------------------------------------------------------------------
+      // 3C. INTERNAL CAROUSEL AUTOLOADER & GTD-1250 TURBINE POWERPACK (FOR EXPLODED VIEW)
+      // -----------------------------------------------------------------------
+      // Korzina / 28-round Carousel Autoloader inside hull floor
+      const carouselRing = new THREE.Mesh(new THREE.CylinderGeometry(0.92, 0.92, 0.32, 24), materials.darkSteel);
+      carouselRing.position.set(0, 0.72, 0.15);
+      autoloaderGroup.add(carouselRing);
+
+      for (let i = 0; i < 16; i++) {
+        const ang = (i / 16) * Math.PI * 2;
+        const propellant = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.38, 10), materials.headlightWarm);
+        propellant.position.set(Math.cos(ang) * 0.68, 0.88, 0.15 + Math.sin(ang) * 0.68);
+        propellant.rotation.z = Math.PI / 2;
+        propellant.rotation.y = -ang;
+        autoloaderGroup.add(propellant);
+      }
+
+      // GTD-1250 Gas Turbine Engine Assembly (Internal Powerpack + Armored Roof Deck & Louvers)
+      // Internal turbine casing sits strictly inside the hull tub (y = 0.78, radius 0.34 -> top at 1.12, below roof at 1.24)
+      const turbineCore = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.36, 1.35, 20), materials.darkSteel);
+      turbineCore.rotation.x = Math.PI / 2;
+      turbineCore.position.set(0, 0.78, -2.05);
+      turbinePackGroup.add(turbineCore);
+
+      const compressorBell = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.28, 0.42, 20), materials.turbineHot);
+      compressorBell.rotation.x = Math.PI / 2;
+      compressorBell.position.set(0, 0.78, -2.65);
+      turbinePackGroup.add(compressorBell);
+
+      const gearboxBlock = new THREE.Mesh(new THREE.BoxGeometry(1.62, 0.46, 0.62), materials.darkSteel);
+      gearboxBlock.position.set(0, 0.76, -2.92);
+      turbinePackGroup.add(gearboxBlock);
+
+      // Armored Engine Transmission Deck (МТО Roof Plate) — flush uniform armorOlive finish when tank is assembled
+      const engineRoofDeck = new THREE.Mesh(new THREE.BoxGeometry(2.30, 0.05, 1.85), materials.armorOlive);
+      engineRoofDeck.position.set(0, 1.245, -2.28);
+      hullBaseGroup.add(engineRoofDeck);
+
+      const intakeRing = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.46, 0.025, 24), materials.armorOlive);
+      intakeRing.position.set(0, 1.265, -1.95);
+      hullBaseGroup.add(intakeRing);
+
+      [-0.68, 0.68].forEach(lx => {
+        const louverBox = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.025, 0.74), materials.armorOlive);
+        louverBox.position.set(lx, 1.265, -2.62);
+        hullBaseGroup.add(louverBox);
+      });
+
+      // Signature T-80 Rear Wide Rectangular Exhaust Grille (Distinct from T-72/T-90 side exhaust)
+      const exhaustFrame = new THREE.Mesh(new THREE.BoxGeometry(1.52, 0.34, 0.16), materials.darkSteel);
+      exhaustFrame.position.set(0, 0.96, -3.32);
+      turbinePackGroup.add(exhaustFrame);
+
+      for (let l = -3; l <= 3; l++) {
+        const louver = new THREE.Mesh(new THREE.BoxGeometry(1.42, 0.025, 0.18), materials.turbineHot);
+        louver.position.set(0, 0.96 + l * 0.04, -3.34);
+        louver.rotation.x = 0.25;
+        turbinePackGroup.add(louver);
+      }
+    })();
+
+    // -------------------------------------------------------------------------
+    // 3D. RELIKT (РЕЛИКТ) MODULAR ERA: GLACIS, SIDE SKIRTS, SAWTOOTH FLAPS & REAR SLAT
+    // -------------------------------------------------------------------------
+    (function buildHullReliktAndSkirts() {
+      // Upper Glacis Relikt Multi-Tile Array (2 rows x 6 modular angled plates)
+      for (let row = 0; row < 2; row++) {
+        for (let col = -2.5; col <= 2.5; col += 1) {
+          const tile = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.085, 0.54), materials.eraOlive);
+          tile.position.set(col * 0.38, 1.24 - row * 0.16, 2.25 + row * 0.48);
+          tile.rotation.x = 0.34;
+          glacisEraGroup.add(tile);
+        }
+      }
+
+      // Build Sawtooth (Zig-Zag) Rubber Flap Geometry via ExtrudeGeometry
+      function createSawtoothRubberSkirt(lengthZ) {
+        const teethCount = 14;
+        const step = lengthZ / teethCount;
+        const shape = new THREE.Shape();
+        shape.moveTo(0, 0);
+        shape.lineTo(lengthZ, 0);
+        // Zig-zag sawtooth cutouts along bottom edge (authentic parade T-80BVM trim)
+        for (let i = teethCount; i >= 1; i--) {
+          const xEnd = (i - 1) * step;
+          const xMid = xEnd + step * 0.5;
+          shape.lineTo(xMid, -0.22);
+          shape.lineTo(xEnd, -0.07);
+        }
+        shape.closePath();
+
+        const geom = new THREE.ExtrudeGeometry(shape, { depth: 0.025, bevelEnabled: false });
+        const mesh = new THREE.Mesh(geom, materials.rubberBlack);
+        mesh.rotation.y = Math.PI / 2;
+        return mesh;
+      }
+
+      // Left & Right Heavy Relikt Side Skirt Modules + Sawtooth Rubber Flaps + Rear Slat Screens
+      [-1, 1].forEach(dir => {
+        const targetSkirtGroup = dir < 0 ? leftSkirtGroup : rightSkirtGroup;
+        const sideX = dir * 1.71;
+
+        // 7 Heavy Relikt Armor Side Modules along forward/mid hull
+        for (let i = 0; i < 7; i++) {
+          const zPos = 2.42 - i * 0.62;
+          const eraBlock = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.52, 0.59), materials.eraOlive);
+          eraBlock.position.set(sideX, 0.94, zPos);
+
+          // Upper mounting bracket & bolt strip in uniform olive armor finish
+          const bracket = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.06, 0.58), materials.armorOlive);
+          bracket.position.set(sideX, 1.21, zPos);
+
+          targetSkirtGroup.add(eraBlock, bracket);
+        }
+
+        // Continuous Upper Armored Skirt Rail (replaced white parade strip with olive armor steel rail)
+        const topRail = new THREE.Mesh(new THREE.BoxGeometry(0.145, 0.03, 4.35), materials.armorOlive);
+        topRail.position.set(sideX, 1.24, 0.56);
+        targetSkirtGroup.add(topRail);
+
+        // Sawtooth Flexible Rubber Lower Skirt beneath Relikt blocks
+        const sawtoothMesh = createSawtoothRubberSkirt(4.35);
+        sawtoothMesh.position.set(sideX - 0.012, 0.68, 2.74);
+        targetSkirtGroup.add(sawtoothMesh);
+
+        // Rear Anti-RPG Slat / Cage Armor Screens around Engine Bay (z = -1.65 to -3.28)
+        const slatSideGroup = new THREE.Group();
+        const slatX = dir * 1.70;
+        // Horizontal slat bars
+        for (let b = 0; b < 6; b++) {
+          const bar = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.022, 1.68), materials.darkSteel);
+          bar.position.set(slatX, 0.68 + b * 0.095, -2.44);
+          slatSideGroup.add(bar);
+        }
+        // Vertical support struts
+        for (let v = 0; v < 5; v++) {
+          const strut = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.54, 0.03), materials.darkSteel);
+          strut.position.set(slatX, 0.92, -1.65 - v * 0.39);
+          slatSideGroup.add(strut);
+        }
+        rearSlatGroup.add(slatSideGroup);
+      });
+
+      // Rear Transverse Slat Cage flanking the GTD-1250 Exhaust Grille
+      [-1.12, 1.12].forEach(rx => {
+        for (let b = 0; b < 5; b++) {
+          const rBar = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.022, 0.03), materials.darkSteel);
+          rBar.position.set(rx, 0.72 + b * 0.09, -3.42);
+          rearSlatGroup.add(rBar);
+        }
+      });
+    })();
+
+    // -------------------------------------------------------------------------
+    // 3E. TURRET SHELL, CLAMSHELL RELIKT ERA WEDGES, PARADE "1" MARKING,
+    //     125MM 2A46M-4 GUN, SOSNA-U SIGHT & UNCREWED KORD 12.7MM MG
+    // -------------------------------------------------------------------------
+    (function buildTurretAndArmament() {
+      // Cast low-profile flattened dome turret core
+      const turretDome = new THREE.Mesh(new THREE.CylinderGeometry(1.12, 1.32, 0.56, 24), materials.armorOlive);
+      turretDome.scale.set(1.0, 1.0, 1.15);
+      turretDome.position.set(0, 0.28, -0.05);
+      turretShellGroup.add(turretDome);
+
+      // Rear Turret Bustle & Equipment Stowage / Schnorkel Tube
+      const bustleBox = new THREE.Mesh(new THREE.BoxGeometry(1.68, 0.44, 0.82), materials.armorOlive);
+      bustleBox.position.set(0, 0.32, -1.42);
+      turretShellGroup.add(bustleBox);
+
+      const snorkelTube = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 1.55, 16), materials.armorOlive);
+      snorkelTube.rotation.z = Math.PI / 2;
+      snorkelTube.position.set(0, 0.36, -1.88);
+      turretShellGroup.add(snorkelTube);
+
+      // Tall Whip Radio / GLONASS Antenna on Turret Bustle
+      const antBase = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.14, 10), materials.darkSteel);
+      antBase.position.set(-0.78, 0.60, -1.35);
+      const antWhip = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.018, 2.15, 8), materials.darkSteel);
+      antWhip.position.set(-0.78, 1.68, -1.35);
+      turretShellGroup.add(antBase, antWhip);
+
+      //Relikt Clamshell Wedge ERA Array on Left & Right Turret Cheeks
+      [-1, 1].forEach(dir => {
+        const cheekGroup = dir < 0 ? turretLeftEraGroup : turretRightEraGroup;
+        // 5 angled overlapping Relikt wedge blocks wrapping the frontal arc
+        for (let seg = 0; seg < 5; seg++) {
+          const angle = (0.22 + seg * 0.21) * dir;
+          const radius = 1.34;
+          const blockGroup = new THREE.Group();
+          blockGroup.position.set(Math.sin(angle) * radius, 0.28, Math.cos(angle) * radius + 0.08);
+          blockGroup.rotation.y = angle;
+
+          // Upper angled wedge plate
+          const upperWedge = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.28, 0.24), materials.eraOlive);
+          upperWedge.position.set(0, 0.09, 0.05);
+          upperWedge.rotation.x = -0.42;
+
+          // Lower angled wedge plate (clamshell profile)
+          const lowerWedge = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.24, 0.22), materials.eraOlive);
+          lowerWedge.position.set(0, -0.10, 0.04);
+          lowerWedge.rotation.x = 0.38;
+
+          blockGroup.add(upperWedge, lowerWedge);
+          cheekGroup.add(blockGroup);
+        }
+
+        // Turret Side Relikt Container Boxes
+        for (let s = 0; s < 3; s++) {
+          const sideBox = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.42, 0.48), materials.eraOlive);
+          sideBox.position.set(dir * 1.36, 0.28, -0.25 - s * 0.52);
+          cheekGroup.add(sideBox);
+        }
+
+        // 902B "Tucha" 81mm Smoke Grenade Dischargers (4 tubes per side)
+        for (let t = 0; t < 4; t++) {
+          const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.28, 12), materials.darkSteel);
+          tube.rotation.x = Math.PI / 3.2;
+          tube.rotation.z = -dir * 0.18;
+          tube.position.set(dir * (1.18 + t * 0.05), 0.36 + t * 0.03, 0.42 - t * 0.11);
+          cheekGroup.add(tube);
+        }
+      });
+
+      // White Tactical Parade Identification Box ("1") on Right/Left Frontal Turret ERA Block
+      const paradeSign = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.30, 0.04), materials.paradeMark);
+      paradeSign.position.set(0.68, 0.55, 1.16);
+      paradeSign.rotation.y = 0.32;
+      paradeSign.rotation.x = -0.18;
+      turretRightEraGroup.add(paradeSign);
+
+      // Turret Roof Relikt ERA Tiles (protecting against top-attack munitions)
+      for (let rx = -2; rx <= 2; rx++) {
+        const roofTile = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.06, 0.36), materials.eraOlive);
+        roofTile.position.set(rx * 0.30, 0.58, 0.52);
+        roofTile.rotation.x = 0.08;
+        turretRoofEraGroup.add(roofTile);
+      }
+
+      // Gunner's Closed Hatch (Left Turret Roof) & Meteorological Wind Sensor Mast
+      const gunnerHatch = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.08, 18), materials.armorOlive);
+      gunnerHatch.position.set(-0.54, 0.58, -0.18);
+      turretShellGroup.add(gunnerHatch);
+
+      const windSensor = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.022, 0.48, 8), materials.darkSteel);
+      windSensor.position.set(-0.62, 0.80, -0.88);
+      turretShellGroup.add(windSensor);
+
+      // SOSNA-U Multi-Channel Thermal Gunner Sight (Armored Housing + Green Coated Optics)
+      sosnaSightGroup.position.set(-0.56, 0.62, 0.36);
+      const sosnaArmorBox = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.32, 0.42), materials.armorOlive);
+      sosnaArmorBox.position.set(0, 0.14, 0);
+      const sosnaWindow = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.18, 0.04), materials.opticsGlass);
+      sosnaWindow.position.set(0, 0.14, 0.20);
+      const sosnaHood = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.04, 0.14), materials.darkSteel);
+      sosnaHood.position.set(0, 0.28, 0.22);
+      sosnaSightGroup.add(sosnaArmorBox, sosnaWindow, sosnaHood);
+
+      // Commander's Cupola (Closed Hatch - Strictly UNCREWED) & High-Detail 12.7mm 6P49 "Kord" Heavy Machine Gun
+      kordMgGroup.position.set(0.56, 0.58, -0.12);
+      const cupolaRing = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.40, 0.16, 24), materials.armorOlive);
+      const closedCmdHatch = new THREE.Mesh(new THREE.CylinderGeometry(0.33, 0.33, 0.06, 20), materials.armorOlive);
+      closedCmdHatch.position.y = 0.10;
+
+      // 3 commander cupola periscopes (ТНПО-160) & TKN-3M commander's day/night sight housing
+      for (let cp = -1; cp <= 1; cp++) {
+        const cPeri = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.06, 0.09), materials.opticsGlass);
+        cPeri.position.set(cp * 0.14, 0.12, 0.28);
+        cPeri.rotation.y = -cp * 0.35;
+        kordMgGroup.add(cPeri);
+      }
+      const tknSight = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.15, 0.22), materials.armorOlive);
+      tknSight.position.set(0, 0.18, 0.24);
+      kordMgGroup.add(cupolaRing, closedCmdHatch, tknSight);
+
+      // 6U16 Pintle Cradle & Dampener Mount
+      const pintlePost = new THREE.Mesh(new THREE.CylinderGeometry(0.038, 0.048, 0.24, 14), materials.kordGunmetal);
+      pintlePost.position.set(0, 0.20, 0.20);
+      const cradleFork = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.08, 0.24), materials.kordGunmetal);
+      cradleFork.position.set(0, 0.31, 0.22);
+      const equilibratorSpring = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.22, 10), materials.kordGunmetal);
+      equilibratorSpring.rotation.x = 0.45;
+      equilibratorSpring.position.set(-0.05, 0.24, 0.14);
+      kordMgGroup.add(pintlePost, cradleFork, equilibratorSpring);
+
+      // Recoiling Upper 12.7mm Kord Assembly (for rapid-fire bolt/barrel vibration)
+      window.kordRecoilAssembly = new THREE.Group();
+      kordRecoilAssembly.position.set(0, 0.36, 0.26);
+      kordMgGroup.add(kordRecoilAssembly);
+
+      // Stamped Riveted Steel Receiver + Top Feed Cover + Cooling Ribs
+      const kordReceiver = new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.115, 0.48), materials.kordGunmetal);
+      const feedCover = new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.042, 0.26, 12), materials.kordGunmetal);
+      feedCover.rotation.x = Math.PI / 2;
+      feedCover.position.set(0, 0.06, -0.04);
+      const rearSightGantry = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.075, 0.03), materials.kordGunmetal);
+      rearSightGantry.position.set(0, 0.095, -0.14);
+
+      // Dual Spade Grips & Buffer Tube at Rear of Receiver
+      [-0.045, 0.045].forEach(gx => {
+        const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.014, 0.11, 8), materials.rubberBlack);
+        grip.position.set(gx, -0.01, -0.28);
+        grip.rotation.x = 0.25;
+        kordRecoilAssembly.add(grip);
+      });
+      const backPlate = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.09, 0.04), materials.kordGunmetal);
+      backPlate.position.set(0, 0.0, -0.25);
+
+      // Right-Side 150-Round Ribbed Steel Ammo Box + Exposed 12.7x108mm Brass Cartridge Feed Belt
+      const kordAmmoBox = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.21, 0.24), materials.armorOlive);
+      kordAmmoBox.position.set(0.12, -0.05, 0.02);
+      for (let r = -1; r <= 1; r++) {
+        const rib = new THREE.Mesh(new THREE.BoxGeometry(0.136, 0.18, 0.018), materials.armorOlive);
+        rib.position.set(0.12, -0.05, 0.02 + r * 0.065);
+        kordRecoilAssembly.add(rib);
+      }
+      // 6 exposed brass 12.7mm cartridges feeding into the receiver
+      for (let c = 0; c < 6; c++) {
+        const cart = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.009, 0.095, 8), materials.brassShell);
+        cart.rotation.x = Math.PI / 2;
+        cart.position.set(0.055 + c * 0.012, 0.055 - c * 0.012, 0.02);
+        kordRecoilAssembly.add(cart);
+      }
+
+      // Heavy Finned 12.7mm Barrel + Lower Gas Cylinder Tube + Perforated Heat Shield + Flat Slotted Muzzle Brake
+      const kordBarrel = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.021, 0.88, 16), materials.kordGunmetal);
+      kordBarrel.rotation.x = Math.PI / 2;
+      kordBarrel.position.set(0, 0.022, 0.66);
+
+      const gasTube = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.013, 0.56, 12), materials.kordGunmetal);
+      gasTube.rotation.x = Math.PI / 2;
+      gasTube.position.set(0, -0.018, 0.50);
+
+      const barrelJacket = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.030, 0.28, 14), materials.kordGunmetal);
+      barrelJacket.rotation.x = Math.PI / 2;
+      barrelJacket.position.set(0, 0.005, 0.36);
+
+      // Front Sight Post Ring & Authentic Flat Double-Baffle 6P49 Muzzle Brake
+      const frontSightPost = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.065, 0.022), materials.kordGunmetal);
+      frontSightPost.position.set(0, 0.052, 1.02);
+
+      const muzzleBrake = new THREE.Mesh(new THREE.BoxGeometry(0.044, 0.034, 0.095), materials.kordGunmetal);
+      muzzleBrake.position.set(0, 0.022, 1.12);
+
+      window.kordMuzzleAnchor = new THREE.Group();
+      kordMuzzleAnchor.position.set(0, 0.022, 1.18);
+      window.kordMuzzleLight = new THREE.PointLight(0xffaa33, 0, 12, 1.6);
+      kordMuzzleAnchor.add(kordMuzzleLight);
+
+      kordRecoilAssembly.add(
+        kordReceiver, feedCover, rearSightGantry, backPlate,
+        kordAmmoBox, kordBarrel, gasTube, barrelJacket,
+        frontSightPost, muzzleBrake, kordMuzzleAnchor
+      );
+
+      // -----------------------------------------------------------------------
+      // 3F. 125MM 2A46M-4 SMOOTHBORE MAIN GUN (THERMAL SHROUD, BORE EVACUATOR, MRS)
+      // -----------------------------------------------------------------------
+      // Accordion Canvas Blast Collar around Gun Mantlet
+      const mantletCollar = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.42, 0.38), materials.rubberBlack);
+      mantletCollar.position.set(0, 0, 0.05);
+      gunElevationGroup.add(mantletCollar);
+
+      // Main 125mm Barrel Tube with Segmented Thermal Shroud
+      const rearTube = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.105, 1.65, 24), materials.gunBarrelMetal);
+      rearTube.rotation.x = Math.PI / 2;
+      rearTube.position.set(0, 0, 0.95);
+      gunRecoilGroup.add(rearTube);
+
+      // Off-center Cylindrical Bore Evacuator (Fume Extractor)
+      const evacuator = new THREE.Mesh(new THREE.CylinderGeometry(0.142, 0.142, 0.72, 24), materials.armorOlive);
+      evacuator.rotation.x = Math.PI / 2;
+      evacuator.position.set(0, 0.02, 2.05);
+      gunRecoilGroup.add(evacuator);
+
+      // Forward Barrel Thermal Shroud + Clamping Rings
+      const fwdTube = new THREE.Mesh(new THREE.CylinderGeometry(0.082, 0.090, 2.45, 24), materials.gunBarrelMetal);
+      fwdTube.rotation.x = Math.PI / 2;
+      fwdTube.position.set(0, 0, 3.60);
+      gunRecoilGroup.add(fwdTube);
+
+      [1.2, 2.6, 3.4, 4.2].forEach(zRing => {
+        const clamp = new THREE.Mesh(new THREE.CylinderGeometry(0.096, 0.096, 0.05, 20), materials.darkSteel);
+        clamp.rotation.x = Math.PI / 2;
+        clamp.position.set(0, 0, zRing);
+        gunRecoilGroup.add(clamp);
+      });
+
+      // Muzzle Crown & Muzzle Reference Sensor (MRS) Tip Mirror Assembly
+      const muzzleCrown = new THREE.Mesh(new THREE.CylinderGeometry(0.092, 0.088, 0.14, 24), materials.darkSteel);
+      muzzleCrown.rotation.x = Math.PI / 2;
+      muzzleCrown.position.set(0, 0, 4.84);
+      const mrsMast = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.09, 0.06), materials.darkSteel);
+      mrsMast.position.set(0, 0.10, 4.82);
+      gunRecoilGroup.add(muzzleCrown, mrsMast);
+    })();
+
+    enableShadow(tankRoot);
+
+    // =========================================================================
+    // 4. INTERACTION, ANIMATION, VOLUMETRIC MUZZLE FIREBALL & SMOKE SYSTEM
+    // =========================================================================
+
+    // Procedural Soft Volumetric Fire & Turbulent Smoke Sprite Textures
+    function createFireballSpriteTexture() {
+      const c = document.createElement('canvas');
+      c.width = 256; c.height = 256;
+      const ctx = c.getContext('2d');
+      const g = ctx.createRadialGradient(128, 128, 6, 128, 128, 122);
+      g.addColorStop(0.0, 'rgba(255, 255, 245, 1.0)');
+      g.addColorStop(0.22, 'rgba(254, 240, 138, 0.96)');
+      g.addColorStop(0.48, 'rgba(249, 115, 22, 0.82)');
+      g.addColorStop(0.75, 'rgba(180, 40, 10, 0.35)');
+      g.addColorStop(1.0, 'rgba(60, 10, 0, 0.0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, 256, 256);
+      // Organic turbulent flame lobes
+      for (let i = 0; i < 28; i++) {
+        const ang = (i / 28) * Math.PI * 2;
+        const r = 35 + Math.random() * 48;
+        const lx = 128 + Math.cos(ang) * r;
+        const ly = 128 + Math.sin(ang) * r;
+        const lg = ctx.createRadialGradient(lx, ly, 2, lx, ly, 36);
+        lg.addColorStop(0, 'rgba(255, 200, 70, 0.45)');
+        lg.addColorStop(1, 'rgba(249, 115, 22, 0)');
+        ctx.fillStyle = lg;
+        ctx.beginPath(); ctx.arc(lx, ly, 36, 0, Math.PI * 2); ctx.fill();
+      }
+      return new THREE.CanvasTexture(c);
+    }
+
+    function createSmokeCloudSpriteTexture() {
+      const c = document.createElement('canvas');
+      c.width = 256; c.height = 256;
+      const ctx = c.getContext('2d');
+      // Soft multi-lobe propellant smoke cloud (no hard circle edges)
+      for (let i = 0; i < 18; i++) {
+        const ox = 128 + (Math.random() - 0.5) * 64;
+        const oy = 128 + (Math.random() - 0.5) * 64;
+        const rad = 45 + Math.random() * 45;
+        const sg = ctx.createRadialGradient(ox, oy, 6, ox, oy, rad);
+        const tone = 165 + Math.floor(Math.random() * 55);
+        sg.addColorStop(0, `rgba(${tone}, ${tone - 4}, ${tone - 10}, 0.26)`);
+        sg.addColorStop(0.6, `rgba(${tone - 25}, ${tone - 28}, ${tone - 32}, 0.12)`);
+        sg.addColorStop(1, 'rgba(80, 80, 80, 0)');
+        ctx.fillStyle = sg;
+        ctx.beginPath(); ctx.arc(ox, oy, rad, 0, Math.PI * 2); ctx.fill();
+      }
+      return new THREE.CanvasTexture(c);
+    }
+
+    const fireballTex = createFireballSpriteTexture();
+    const smokeCloudTex = createSmokeCloudSpriteTexture();
+
+    // Muzzle Origin Anchor at tip of 125mm 2A46M-4 barrel
+    const muzzleBlastGroup = new THREE.Group();
+    muzzleBlastGroup.position.set(0, 0, 4.92);
+    gunRecoilGroup.add(muzzleBlastGroup);
+
+    const muzzlePointLight = new THREE.PointLight(0xff9922, 0, 38, 1.5);
+    muzzlePointLight.position.set(0, 0.35, 1.4);
+    muzzleBlastGroup.add(muzzlePointLight);
+
+    // Dynamic World-Space Particle Pool for Fireball, Side Blast Lobes, Ground Dust, Kord Tracers & Brass Shells
+    const activeBlastParticles = [];
+    const activeProjectiles = [];
+
+    // GTD-1250 Rear Exhaust Heat-Haze Plume Particles
+    const heatPlumeGroup = new THREE.Group();
+    heatPlumeGroup.position.set(0, 0.98, -3.45);
+    turbinePackGroup.add(heatPlumeGroup);
+
+    const heatPuffs = [];
+    for (let p = 0; p < 14; p++) {
+      const puffMat = new THREE.MeshBasicMaterial({
+        color: 0xf97316,
+        transparent: true,
+        opacity: 0.14,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+      const puff = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 10), puffMat);
+      puff.position.set((Math.random() - 0.5) * 1.1, (Math.random() - 0.5) * 0.15, -Math.random() * 1.6);
+      puff.userData = { speed: 1.2 + Math.random() * 1.4, phase: Math.random() * Math.PI * 2 };
+      heatPlumeGroup.add(puff);
+      heatPuffs.push(puff);
+    }
+
+    // Application State
+    const state = {
+      turretYawDeg: 0,
+      gunPitchDeg: 0.0,
+      targetYawRad: 0,
+      targetPitchRad: 0.0,
+      paradeDrive: false,
+      turbineSpool: false,
+      sosnaSightActive: false,
+      sightChannel: 'whot', // 'whot' or 'nvg'
+      explodeFactor: 0,
+      hullSpeed: 0,
+      hullYawVel: 0
+    };
+    gunElevationGroup.rotation.x = state.targetPitchRad;
+
+
+    // -------------------------------------------------------------------------
+    // 4B. 125MM 2A46M-4 APFSDS FIRING SEQUENCE (MULTI-STAGE VOLUMETRIC FIRE & SMOKE)
+    // -------------------------------------------------------------------------
+    function spawnParticleSprite(tex, colorHex, blending, pos, vel, startScale, endScale, maxLife, drag = 0.94, buoyancy = 0.45, startOpacity = 0.95) {
+      const mat = new THREE.SpriteMaterial({
+        map: tex,
+        color: colorHex,
+        transparent: true,
+        opacity: startOpacity,
+        blending: blending,
+        depthWrite: false,
+        rotation: Math.random() * Math.PI * 2
+      });
+      const sprite = new THREE.Sprite(mat);
+      sprite.position.copy(pos);
+      sprite.scale.setScalar(startScale);
+      scene.add(sprite);
+      activeBlastParticles.push({
+        sprite,
+        vel: vel.clone(),
+        startScale,
+        endScale,
+        life: 0,
+        maxLife,
+        drag,
+        buoyancy,
+        startOpacity,
+        rotSpeed: (Math.random() - 0.5) * 2.5
+      });
+    }
+
+    // =========================================================================
+    // ГЛАВНЫЙ ЦИКЛ: частицы, снаряды, логика боя (battle.js), рендер
+    // =========================================================================
+    const clock = new THREE.Clock();
+    const keysPressed = {};                       // совместимость: управление целиком в battle.js
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = Math.min(clock.getDelta(), 0.05);
+      const elapsed = clock.getElapsedTime();
+      for (let i = activeBlastParticles.length - 1; i >= 0; i--) {
+        const p = activeBlastParticles[i];
+        p.life += dt;
+        if (p.life >= p.maxLife) { scene.remove(p.sprite); p.sprite.material.dispose(); activeBlastParticles.splice(i, 1); continue; }
+        const t = p.life / p.maxLife;
+        p.sprite.position.addScaledVector(p.vel, dt);
+        p.vel.multiplyScalar(Math.pow(p.drag, dt * 60));
+        p.vel.y += p.buoyancy * dt;
+        p.sprite.scale.setScalar(p.startScale + (p.endScale - p.startScale) * Math.pow(t, 0.55));
+        p.sprite.material.rotation += p.rotSpeed * dt;
+        p.sprite.material.opacity = p.startOpacity * Math.pow(1 - t, 1.35);
+      }
+      for (let i = activeProjectiles.length - 1; i >= 0; i--) {
+        const pr = activeProjectiles[i];
+        pr.life += dt;
+        if (pr.life >= pr.maxLife) { scene.remove(pr.mesh); activeProjectiles.splice(i, 1); continue; }
+        pr.vel.y += pr.gravity * dt;
+        pr.mesh.position.addScaledVector(pr.vel, dt);
+        if (pr.rotVel) { pr.mesh.rotation.x += pr.rotVel.x * dt; pr.mesh.rotation.y += pr.rotVel.y * dt; pr.mesh.rotation.z += pr.rotVel.z * dt; }
+      }
+      if (window.__battleHook) window.__battleHook(dt, elapsed);
+      if (!window.__battleCam) controls.update();
+      renderer.render(scene, camera);
+    }
+    window.addEventListener('resize', () => {
+      const { w, h } = getViewportSize();
+      camera.aspect = w / h; camera.updateProjectionMatrix(); renderer.setSize(w, h);
+    });
+    animate();
+    window.__app = true;
+  </script>
+  <script src="models/centauro_ii.glb.js"></script><script>__ld(10)</script>
+  <script src="models/m1a1_abrams.glb.js"></script><script>__ld(29)</script>
+  <script src="models/challenger.glb.js"></script><script>__ld(38)</script>
+  <script src="models/leopard.glb.js"></script><script>__ld(47)</script>
+  <script src="models/type10.glb.js"></script><script>__ld(55)</script>
+  <script src="plants.js"></script><script>__ld(55)</script>
+  <script src="map_arizona.js"></script><script>__ld(55)</script>
+  <script src="models/town_kit.glb.js"></script><script>__ld(88)</script>
+  <script src="models/pickups.glb.js"></script><script>__ld(96)</script>
+  <script src="map_town.js"></script><script>__ld(96)</script>
+  <script src="map_montana.js"></script><script>__ld(97)</script>
+  <script src="models/freight_station_sky.jpg.js"></script><script>__ld(99)</script>
+  <script src="map_training.js"></script><script>__ld(99)</script>
+  <script src="battle.js"></script><script>__ld(100)</script>
+</body>
+</html>
